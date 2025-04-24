@@ -1,0 +1,166 @@
+// ----------------------------
+// PRISMA SCHEMA
+// ----------------------------
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and profile
+model User {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  firstName     String
+  lastName      String
+  email         String   @unique
+  password      String // Hashed password
+  
+  // User profile information
+  visibleName   String?
+  phoneNumber   String?
+  contactEmail  String?  // This can be different from auth email
+  country       String?
+  state         String?
+  bio           String?  @db.Text
+  
+  // Social media
+  twitter       String?
+  linkedin      String?
+  facebook      String?
+  
+  // Relations
+  reviews       Review[]
+  image         File?    @relation("UserProfileImage")
+  
+  @@map("users")
+}
+
+// Company model
+model Company {
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Basic info
+  name              String
+  website           String?
+  salesEmail        String?
+  contactPhone      String?
+  mcNumber          String?   @unique // MC#
+  usdotNumber       String?   @unique // USDOT#
+  foundingYear      Int?
+  totalEmployees    Int?
+  aboutCompany      String?   @db.Text
+  
+  // Authentication (for company accounts)
+  workEmail         String?   @unique
+  password          String?   // Hashed password, for company login
+  
+  // Relations
+  companyLogos      CompanyLogo[]
+  services          Service[]
+  contactInformation ContactInformation[]
+  reviews           Review[]
+  isVerified        Boolean   @default(false)
+  
+  @@map("companies")
+}
+
+// File model for all uploads
+model File {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  originalName  String
+  filename      String   // Stored filename
+  path          String   // File path on server
+  mimeType      String
+  size          Int
+  
+  // Relations - a file can only be associated with one entity
+  userImage     User?    @relation("UserProfileImage", fields: [userId], references: [id])
+  userId        String?  @unique
+  
+  companyLogo   CompanyLogo? @relation("LogoFile", fields: [companyLogoId], references: [id])
+  companyLogoId String?  @unique
+  
+  reviewPhoto   ReviewPhoto? @relation("ReviewFile", fields: [reviewPhotoId], references: [id])
+  reviewPhotoId String?  @unique
+  
+  @@map("files")
+}
+
+// Company Logo model
+model CompanyLogo {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  file      File?    @relation("LogoFile")
+  
+  @@map("company_logos")
+}
+
+// Company services model
+model Service {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  serviceName String   // This would be a select in UI
+  description String?  @db.Text
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  
+  @@map("services")
+}
+
+// Contact information model
+model ContactInformation {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  phone         String?
+  email         String?
+  officeAddress String?  @db.Text
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String
+  
+  @@map("contact_information")
+}
+
+// Review model
+model Review {
+  id                  String        @id @default(cuid())
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  rating              Int           // 1-5
+  reviewText          String        @db.Text
+  pickupState         String?
+  deliveryState       String?
+  deliveryDate        DateTime?
+  transportationPrice Decimal?      @db.Decimal(10, 2)
+  
+  // Relations
+  photos              ReviewPhoto[]
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId           String
+  
+  @@map("reviews")
+}
+
+// Review photos model
+model ReviewPhoto {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reviewId  String
+  file      File?    @relation("ReviewFile")
+  
+  @@map("review_photos")
+}
