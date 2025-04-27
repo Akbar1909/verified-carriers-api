@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FilesService } from '../files/files.service';
-import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { RegisterCompanyDto } from './dto/register-company.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -12,64 +16,121 @@ export class CompaniesService {
     private filesService: FilesService,
   ) {}
 
-  async create(createCompanyDto: CreateCompanyDto) {
-    const { logoFileIds, services, contactInformation, ...companyData } = createCompanyDto;
-    
-    // Hash password if provided
-    if (companyData.password) {
-      companyData.password = await bcrypt.hash(companyData.password, 10);
-    }
-    
+  // Step 1: Initial company registration with basic info
+  async register(registerCompanyDto: RegisterCompanyDto) {
+    const { name, workEmail, password } = registerCompanyDto;
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     try {
-      // Create the company
+      // Create the company with minimal information
       const company = await this.prisma.company.create({
-        data: companyData,
+        data: {
+          name,
+          workEmail,
+          password: hashedPassword,
+          registrationStatus: 'INITIAL',
+          isVerified: false,
+          companyLogos: undefined,
+          services: undefined,
+          reviews: undefined,
+          contactInformation: undefined,
+          // Set defaults for required fields if any
+        },
       });
-      
-      // Add logos if provided
-      if (logoFileIds && logoFileIds.length > 0) {
-        for (const fileId of logoFileIds) {
-          const companyLogo = await this.prisma.companyLogo.create({
-            data: {
-              companyId: company.id,
-            },
-          });
-          await this.filesService.linkToCompanyLogo(fileId, companyLogo.id);
-        }
-      }
-      
-      // Add services if provided
-      if (services && services.length > 0) {
-        for (const service of services) {
-          await this.prisma.service.create({
-            data: {
-              ...service,
-              companyId: company.id,
-            },
-          });
-        }
-      }
-      
-      // Add contact information if provided
-      if (contactInformation && contactInformation.length > 0) {
-        for (const contact of contactInformation) {
-          await this.prisma.contactInformation.create({
-            data: {
-              ...contact,
-              companyId: company.id,
-            },
-          });
-        }
-      }
-      
-      // Return company with all relations
-      return this.findOne(company.id);
+
+      // Return company without sensitive information
+      const { password: _, ...result } = company;
+      return result;
     } catch (error) {
       if (error.code === 'P2002') {
-        throw new BadRequestException('Company with this MC#, USDOT# or work email already exists');
+        throw new BadRequestException(
+          'Company with this work email already exists',
+        );
       }
       throw error;
     }
+  }
+
+ // Fixed method in CompaniesService
+
+async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
+
+
+  // Check if company exists
+  await this.findOne(id);
+
+  
+  const { logoFileIds, services, contactInformation, ...companyData } = updateCompanyDto;
+  
+  // Only hash password if provided in the update
+  let dataToUpdate = { ...companyData, registrationStatus: 'COMPLETE' as any };
+  
+ 
+  
+  // Update company basic info
+  await this.prisma.company.update({
+    where: { id },
+    data: dataToUpdate,
+  });
+  
+  // Add logos if provided
+  if (logoFileIds && logoFileIds.length > 0) {
+    for (const fileId of logoFileIds) {
+      const companyLogo = await this.prisma.companyLogo.create({
+        data: {
+          companyId: id,
+        },
+      });
+      await this.filesService.linkToCompanyLogo(fileId, companyLogo.id);
+    }
+  }
+  
+  // Add services if provided
+  if (services && services.length > 0) {
+    for (const service of services) {
+      await this.prisma.service.create({
+        data: {
+          ...service,
+          serviceName: service.serviceName as any, // Explicitly cast serviceName to ServiceType
+          company: {
+            connect: { id },
+          },
+        },
+      });
+    }
+  }
+  
+  // Add contact information if provided
+  if (contactInformation && contactInformation.length > 0) {
+    for (const contact of contactInformation) {
+      await this.prisma.contactInformation.create({
+        data: {
+          ...contact,
+          companyId: id,
+        },
+      });
+    }
+  }
+  
+  // Return updated company
+  return this.findOne(id);
+}
+
+  // Verify a company (admin function)
+  async verifyCompany(id: string, adminId: string) {
+    const company = await this.findOne(id);
+
+    return this.prisma.company.update({
+      where: { id },
+      data: {
+        isVerified: true,
+        verifiedAt: new Date(),
+        verifiedBy: adminId,
+        registrationStatus: 'VERIFIED',
+      },
+    });
   }
 
   async findAll() {
@@ -86,7 +147,28 @@ export class CompaniesService {
     });
   }
 
+  // Find companies with specific registration status
+  async findByRegistrationStatus(status: 'INITIAL' | 'COMPLETE' | 'VERIFIED') {
+    return this.prisma.company.findMany({
+      where: {
+        registrationStatus: status,
+      },
+      include: {
+        companyLogos: {
+          include: {
+            file: true,
+          },
+        },
+        services: true,
+        contactInformation: true,
+      },
+    });
+  }
+
   async findOne(id: string) {
+
+    console.log({id},'test')
+
     const company = await this.prisma.company.findUnique({
       where: { id },
       include: {
@@ -126,28 +208,44 @@ export class CompaniesService {
     return result;
   }
 
+  // Find company by work email
+  async findByEmail(workEmail: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { workEmail },
+    });
+
+    if (!company) {
+      throw new NotFoundException(`Company with email ${workEmail} not found`);
+    }
+
+    // Remove sensitive information
+    const { password, ...result } = company;
+    return result;
+  }
+
   async update(id: string, updateCompanyDto: UpdateCompanyDto) {
     // Check if company exists
     await this.findOne(id);
-    
-    const { logoFileIds, services, contactInformation, ...companyData } = updateCompanyDto;
-    
+
+    const { logoFileIds, services, contactInformation, ...companyData } =
+      updateCompanyDto;
+
     // Hash password if provided
     if (companyData.password) {
       companyData.password = await bcrypt.hash(companyData.password, 10);
     }
-    
+
     // Update company basic info
     await this.prisma.company.update({
       where: { id },
       data: companyData,
     });
-    
+
     // Update logos if provided
     if (logoFileIds && logoFileIds.length > 0) {
       // Optional: Clear existing logos if needed
       // await this.prisma.companyLogo.deleteMany({ where: { companyId: id } });
-      
+
       for (const fileId of logoFileIds) {
         const companyLogo = await this.prisma.companyLogo.create({
           data: {
@@ -157,27 +255,30 @@ export class CompaniesService {
         await this.filesService.linkToCompanyLogo(fileId, companyLogo.id);
       }
     }
-    
+
     // Update services if provided
     if (services && services.length > 0) {
       // Optional: Clear existing services if needed
       // await this.prisma.service.deleteMany({ where: { companyId: id } });
-      
+
       for (const service of services) {
         await this.prisma.service.create({
           data: {
             ...service,
-            companyId: id,
+            serviceName: service.serviceName as any, // Explicitly cast serviceName to ServiceType
+            company: {
+              connect: { id },
+            },
           },
         });
       }
     }
-    
+
     // Update contact information if provided
     if (contactInformation && contactInformation.length > 0) {
       // Optional: Clear existing contact information if needed
       // await this.prisma.contactInformation.deleteMany({ where: { companyId: id } });
-      
+
       for (const contact of contactInformation) {
         await this.prisma.contactInformation.create({
           data: {
@@ -187,7 +288,7 @@ export class CompaniesService {
         });
       }
     }
-    
+
     // Return updated company
     return this.findOne(id);
   }
@@ -195,58 +296,60 @@ export class CompaniesService {
   async remove(id: string) {
     // Check if company exists
     await this.findOne(id);
-    
+
     return this.prisma.company.delete({
       where: { id },
     });
   }
-  
+
   // Methods for managing specific company relations
-  
+
   async removeLogo(logoId: string) {
     const logo = await this.prisma.companyLogo.findUnique({
       where: { id: logoId },
       include: { file: true },
     });
-    
+
     if (!logo) {
       throw new NotFoundException(`Logo with ID ${logoId} not found`);
     }
-    
+
     // Delete the file if it exists
     if (logo.file) {
       await this.filesService.remove(logo.file.id);
     }
-    
+
     // Delete the logo
     return this.prisma.companyLogo.delete({
       where: { id: logoId },
     });
   }
-  
+
   async removeService(serviceId: string) {
     const service = await this.prisma.service.findUnique({
       where: { id: serviceId },
     });
-    
+
     if (!service) {
       throw new NotFoundException(`Service with ID ${serviceId} not found`);
     }
-    
+
     return this.prisma.service.delete({
       where: { id: serviceId },
     });
   }
-  
+
   async removeContactInformation(contactId: string) {
     const contact = await this.prisma.contactInformation.findUnique({
       where: { id: contactId },
     });
-    
+
     if (!contact) {
-      throw new NotFoundException(`Contact information with ID ${contactId} not found`);
+      throw new NotFoundException(
+        `Contact information with ID ${contactId} not found`,
+      );
     }
-    
+
     return this.prisma.contactInformation.delete({
       where: { id: contactId },
     });

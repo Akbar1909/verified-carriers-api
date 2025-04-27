@@ -1,15 +1,12 @@
-
-import { IsEmail, IsNotEmpty, IsString, IsOptional, Length } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, IsUUID } from 'class-validator';
 
 export class CreateUserDto {
   @IsNotEmpty()
   @IsString()
-  @Length(2, 50)
   firstName: string;
 
   @IsNotEmpty()
   @IsString()
-  @Length(2, 50)
   lastName: string;
 
   @IsNotEmpty()
@@ -18,12 +15,8 @@ export class CreateUserDto {
 
   @IsNotEmpty()
   @IsString()
-  @Length(8, 100)
+  @MinLength(8)
   password: string;
-
-  @IsOptional()
-  @IsString()
-  imageId?: string; // Reference to a file ID
 
   @IsOptional()
   @IsString()
@@ -34,7 +27,7 @@ export class CreateUserDto {
   phoneNumber?: string;
 
   @IsOptional()
-  @IsEmail()
+  @IsString()
   contactEmail?: string;
 
   @IsOptional()
@@ -60,4 +53,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   facebook?: string;
+
+  @IsOptional()
+  @IsUUID()
+  fileId?: string; // For profile image
 }

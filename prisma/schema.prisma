@@ -1,5 +1,5 @@
 // ----------------------------
-// PRISMA SCHEMA
+// UPDATED PRISMA SCHEMA
 // ----------------------------
 // prisma/schema.prisma
 
@@ -13,22 +13,33 @@ datasource db {
 }
 
 // User model for authentication and profile
+// In your prisma schema file
+
+// User registration status enum
+enum UserProfileStatus {
+  INITIAL       // Just registered with basic info
+  COMPLETE      // Completed full profile
+}
+
 model User {
-  id            String   @id @default(cuid())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id            String            @id @default(cuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   firstName     String
   lastName      String
-  email         String   @unique
-  password      String // Hashed password
+  email         String            @unique
+  password      String            // Hashed password
+  
+  // Profile status
+  profileStatus UserProfileStatus @default(INITIAL)
   
   // User profile information
   visibleName   String?
   phoneNumber   String?
-  contactEmail  String?  // This can be different from auth email
+  contactEmail  String?           // This can be different from auth email
   country       String?
   state         String?
-  bio           String?  @db.Text
+  bio           String?           @db.Text
   
   // Social media
   twitter       String?
@@ -37,38 +48,50 @@ model User {
   
   // Relations
   reviews       Review[]
-  image         File?    @relation("UserProfileImage")
+  image         File?             @relation("UserProfileImage")
   
   @@map("users")
 }
 
+// Registration status enum
+enum RegistrationStatus {
+  INITIAL      // Just created account with basic info
+  COMPLETE     // Completed full profile
+  VERIFIED     // Company has been verified by admin
+}
+
 // Company model
 model Company {
-  id                String    @id @default(cuid())
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                String            @id @default(cuid())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   
   // Basic info
   name              String
   website           String?
   salesEmail        String?
   contactPhone      String?
-  mcNumber          String?   @unique // MC#
-  usdotNumber       String?   @unique // USDOT#
+  mcNumber          String?           @unique // MC#
+  usdotNumber       String?           @unique // USDOT#
   foundingYear      Int?
   totalEmployees    Int?
-  aboutCompany      String?   @db.Text
+  aboutCompany      String?           @db.Text
   
   // Authentication (for company accounts)
-  workEmail         String?   @unique
-  password          String?   // Hashed password, for company login
+  workEmail         String            @unique  // Required for company login
+  password          String            // Hashed password, for company login
+  
+  // Registration and verification status
+  registrationStatus RegistrationStatus @default(INITIAL)
+  isVerified        Boolean           @default(false)
+  verifiedAt        DateTime?
+  verifiedBy        String?           // Could be admin ID or system identifier
   
   // Relations
   companyLogos      CompanyLogo[]
   services          Service[]
   contactInformation ContactInformation[]
   reviews           Review[]
-  isVerified        Boolean   @default(false)
   
   @@map("companies")
 }
@@ -107,13 +130,30 @@ model CompanyLogo {
   @@map("company_logos")
 }
 
+// Service Types enum
+enum ServiceType {
+  FULL_TRUCKLOAD
+  LESS_THAN_TRUCKLOAD
+  INTERMODAL
+  REFRIGERATED
+  FLATBED
+  HEAVY_HAUL
+  EXPEDITED
+  HAZARDOUS_MATERIALS
+  WHITE_GLOVE
+  LAST_MILE
+  WAREHOUSING
+  CROSS_BORDER
+  OTHER
+}
+
 // Company services model
 model Service {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  serviceName String   // This would be a select in UI
-  description String?  @db.Text
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id          String      @id @default(cuid())
+  createdAt   DateTime    @default(now())
+  serviceName ServiceType // Using enum for consistency
+  description String?     @db.Text
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId   String
   
   @@map("services")
@@ -126,6 +166,7 @@ model ContactInformation {
   phone         String?
   email         String?
   officeAddress String?  @db.Text
+  contactType   String?  // e.g., "Sales", "Support", "Operations"
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId     String
   
@@ -143,6 +184,15 @@ model Review {
   deliveryState       String?
   deliveryDate        DateTime?
   transportationPrice Decimal?      @db.Decimal(10, 2)
+  
+  // Additional useful review metadata
+  isVerified          Boolean       @default(false) // If the review has been verified
+  shipmentType        String?       // Type of shipment
+  
+  // For review moderation
+  isPublished         Boolean       @default(true)
+  moderatedAt         DateTime?
+  moderatedBy         String?
   
   // Relations
   photos              ReviewPhoto[]

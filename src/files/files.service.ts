@@ -65,4 +65,11 @@ export class FilesService {
       data: { reviewPhotoId },
     });
   }
+
+  async linkToUserProfile(fileId:string, userId:string):Promise<File>{
+    return this.prisma.file.update({
+      where:{id:fileId},
+      data:{userId}
+    })
+  }
 }

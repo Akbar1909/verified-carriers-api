@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { FilesService } from '../files/files.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { FilesService } from '../files/files.service';
+import { RegisterUserDto } from './dto/register-user.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -12,61 +13,106 @@ export class UsersService {
     private filesService: FilesService,
   ) {}
 
-  async create(createUserDto: CreateUserDto) {
-    const { imageId, ...userData } = createUserDto;
+// Step 1: Initial user registration with basic info
+async register(registerUserDto: RegisterUserDto) {
+  const { firstName, lastName, email, password } = registerUserDto;
+  
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 10);
+  
+  try {
+    // Create the user with minimal information
+    const user = await this.prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        email,
+        password: hashedPassword,
+        profileStatus: 'INITIAL', // Set initial status
+      },
+    });
     
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    // Return user without sensitive information
+    const { password: _, ...result } = user;
+    return result;
+  } catch (error) {
+    if (error.code === 'P2002') {
+      throw new BadRequestException('User with this email already exists');
+    }
+    throw error;
+  }
+}
+
+// Step 2: Complete user profile with additional information
+async completeProfile(id: string, updateUserDto: UpdateUserDto) {
+  // Check if user exists
+  await this.findOne(id);
+  
+  const { fileId, ...userData } = updateUserDto;
+  
+  // Create data update object without password
+  let dataToUpdate = { 
+    ...userData,
+    profileStatus: 'COMPLETE' // Update the status with the enum value
+  };
+  
+  
+  // Update user basic info
+  await this.prisma.user.update({
+    where: { id },
+    // @ts-expect-error
+    data: dataToUpdate,
+  });
+  
+  // Add profile image if provided
+  if (fileId) {
+    await this.filesService.linkToUserProfile(fileId, id);
+  }
+  
+  // Return updated user
+  return this.findOne(id);
+}
+
+  async create(createUserDto: CreateUserDto) {
+    const { fileId, ...userData } = createUserDto;
+    
+    // Hash password
+    userData.password = await bcrypt.hash(userData.password, 10);
     
     try {
+      // Create the user
       const user = await this.prisma.user.create({
-        data: {
-          ...userData,
-          password: hashedPassword,
-        },
+        data: userData,
       });
       
-      // Link image if provided
-      if (imageId) {
-        await this.filesService.linkToUser(imageId, user.id);
+      // Link profile image if provided
+      if (fileId) {
+        await this.filesService.linkToUserProfile(fileId, user.id);
       }
       
-      // Get user with image
-      return this.findOne(user.id);
+      // Return user without sensitive information
+      const { password, ...result } = user;
+      return result;
     } catch (error) {
       if (error.code === 'P2002') {
-        throw new BadRequestException('Email already exists');
+        throw new BadRequestException('User with this email already exists');
       }
       throw error;
     }
   }
 
   async findAll() {
-    return this.prisma.user.findMany({
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        visibleName: true,
-        phoneNumber: true,
-        contactEmail: true,
-        country: true,
-        state: true,
-        bio: true,
-        twitter: true,
-        linkedin: true,
-        facebook: true,
-        createdAt: true,
-        updatedAt: true,
-        image: {
-          select: {
-            id: true,
-            originalName: true,
-            path: true,
-          },
-        },
+    const users = await this.prisma.user.findMany({
+      include: {
+        image: true,
+        reviews: true,
       },
+    });
+    
+    // Remove sensitive information
+    return users.map(user => {
+      const { password, ...result } = user;
+      return result;
     });
   }
 
@@ -74,15 +120,15 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
-        image: {
-          select: {
-            id: true,
-            originalName: true,
-            path: true,
-          },
-        },
+        image: true,
         reviews: {
           include: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             photos: {
               include: {
                 file: true,
@@ -97,29 +143,49 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    // Remove sensitive information
+    const { password, ...result } = user;
+    return result;
+  }
+
+  // Find user by email
+  async findByEmail(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with email ${email} not found`);
+    }
+
+    // Remove sensitive information
+    const { password, ...result } = user;
+    return result;
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
     // Check if user exists
     await this.findOne(id);
     
-    const { imageId, ...userData } = updateUserDto;
+    const { fileId, ...userData } = updateUserDto;
     
     // Hash password if provided
     if (userData.password) {
       userData.password = await bcrypt.hash(userData.password, 10);
+    } else {
+      // Remove password field if not provided
+      delete userData.password;
     }
-
-    // Update user data
+    
+    // Update user basic info
     await this.prisma.user.update({
       where: { id },
       data: userData,
     });
     
-    // Update image relation if provided
-    if (imageId) {
-      await this.filesService.linkToUser(imageId, id);
+    // Update profile image if provided
+    if (fileId) {
+      await this.filesService.linkToUserProfile(fileId, id);
     }
     
     // Return updated user
@@ -133,17 +199,5 @@ export class UsersService {
     return this.prisma.user.delete({
       where: { id },
     });
-  }
-
-  async findByEmail(email: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
-    
-    if (!user) {
-      throw new NotFoundException(`User with email ${email} not found`);
-    }
-    
-    return user;
   }
 }
