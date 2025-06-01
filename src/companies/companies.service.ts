@@ -155,7 +155,6 @@ export class CompaniesService {
   async findAll({ experience, serviceIds = [] }: FilterCompanyDto) {
     const whereClause: Prisma.CompanyWhereInput = {};
 
-    console.log(serviceIds)
 
     if (experience) {
       const currentYear = new Date().getFullYear();

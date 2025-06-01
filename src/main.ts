@@ -9,9 +9,11 @@ async function bootstrap() {
     next();
   });
 
+  app.setGlobalPrefix('api')
+
   // Enable CORS
   app.enableCors();
 
-  await app.listen(3000);
+  await app.listen(4000);
 }
 bootstrap();
