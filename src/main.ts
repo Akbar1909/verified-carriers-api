@@ -6,7 +6,6 @@ async function bootstrap() {
 
   app.enableCors({
     origin: ['http://verifiedcarriers.com', 'http://www.verifiedcarriers.com'], // frontend domain
-    credentials: true, // if you're using cookies or Authorization headers
   });
 
   app.setGlobalPrefix('api/v1');
