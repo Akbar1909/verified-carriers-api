@@ -9,7 +9,7 @@ async function bootstrap() {
     next();
   });
 
-  app.setGlobalPrefix('api')
+  app.setGlobalPrefix('api/v1')
 
   // Enable CORS
   app.enableCors();
