@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FilesService } from '../files/files.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -13,83 +17,97 @@ export class UsersService {
     private filesService: FilesService,
   ) {}
 
-// Step 1: Initial user registration with basic info
-async register(registerUserDto: RegisterUserDto) {
-  const { firstName, lastName, email, password } = registerUserDto;
-  
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 10);
-  
-  try {
-    // Create the user with minimal information
-    const user = await this.prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        password: hashedPassword,
-        profileStatus: 'INITIAL', // Set initial status
-      },
-    });
-    
-    // Return user without sensitive information
-    const { password: _, ...result } = user;
-    return result;
-  } catch (error) {
-    if (error.code === 'P2002') {
-      throw new BadRequestException('User with this email already exists');
-    }
-    throw error;
-  }
-}
+  async me(userId: string) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...result } = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      return result;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('User with email not found');
+      }
 
-// Step 2: Complete user profile with additional information
-async completeProfile(id: string, updateUserDto: UpdateUserDto) {
-  // Check if user exists
-  await this.findOne(id);
-  
-  const { fileId, ...userData } = updateUserDto;
-  
-  // Create data update object without password
-  let dataToUpdate = { 
-    ...userData,
-    profileStatus: 'COMPLETE' // Update the status with the enum value
-  };
-  
-  
-  // Update user basic info
-  await this.prisma.user.update({
-    where: { id },
-    // @ts-expect-error
-    data: dataToUpdate,
-  });
-  
-  // Add profile image if provided
-  if (fileId) {
-    await this.filesService.linkToUserProfile(fileId, id);
+      throw Error;
+    }
   }
-  
-  // Return updated user
-  return this.findOne(id);
-}
+
+  // Step 1: Initial user registration with basic info
+  async register(registerUserDto: RegisterUserDto) {
+    const { name, email, password } = registerUserDto;
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    try {
+      // Create the user with minimal information
+      const user = await this.prisma.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          profileStatus: 'INITIAL', // Set initial status
+        },
+      });
+
+      // Return user without sensitive information
+      const { password: _, ...result } = user;
+      return result;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('User with this email already exists');
+      }
+      throw error;
+    }
+  }
+
+  // Step 2: Complete user profile with additional information
+  async completeProfile(id: string, updateUserDto: UpdateUserDto) {
+    // Check if user exists
+    await this.findOne(id);
+
+    const { fileId, ...userData } = updateUserDto;
+
+    // Create data update object without password
+    const dataToUpdate = {
+      ...userData,
+      profileStatus: 'COMPLETE', // Update the status with the enum value
+    };
+
+    // Update user basic info
+    await this.prisma.user.update({
+      where: { id },
+      // @ts-expect-error
+      data: dataToUpdate,
+    });
+
+    // Add profile image if provided
+    if (fileId) {
+      await this.filesService.linkToUserProfile(fileId, id);
+    }
+
+    // Return updated user
+    return this.findOne(id);
+  }
 
   async create(createUserDto: CreateUserDto) {
     const { fileId, ...userData } = createUserDto;
-    
+
     // Hash password
     userData.password = await bcrypt.hash(userData.password, 10);
-    
+
     try {
       // Create the user
       const user = await this.prisma.user.create({
         data: userData,
       });
-      
+
       // Link profile image if provided
       if (fileId) {
         await this.filesService.linkToUserProfile(fileId, user.id);
       }
-      
+
       // Return user without sensitive information
       const { password, ...result } = user;
       return result;
@@ -108,9 +126,9 @@ async completeProfile(id: string, updateUserDto: UpdateUserDto) {
         reviews: true,
       },
     });
-    
+
     // Remove sensitive information
-    return users.map(user => {
+    return users.map((user) => {
       const { password, ...result } = user;
       return result;
     });
@@ -166,9 +184,9 @@ async completeProfile(id: string, updateUserDto: UpdateUserDto) {
   async update(id: string, updateUserDto: UpdateUserDto) {
     // Check if user exists
     await this.findOne(id);
-    
+
     const { fileId, ...userData } = updateUserDto;
-    
+
     // Hash password if provided
     if (userData.password) {
       userData.password = await bcrypt.hash(userData.password, 10);
@@ -176,18 +194,18 @@ async completeProfile(id: string, updateUserDto: UpdateUserDto) {
       // Remove password field if not provided
       delete userData.password;
     }
-    
+
     // Update user basic info
     await this.prisma.user.update({
       where: { id },
       data: userData,
     });
-    
+
     // Update profile image if provided
     if (fileId) {
       await this.filesService.linkToUserProfile(fileId, id);
     }
-    
+
     // Return updated user
     return this.findOne(id);
   }
@@ -195,7 +213,7 @@ async completeProfile(id: string, updateUserDto: UpdateUserDto) {
   async remove(id: string) {
     // Check if user exists
     await this.findOne(id);
-    
+
     return this.prisma.user.delete({
       where: { id },
     });

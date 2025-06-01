@@ -1,4 +1,12 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsNumber, IsBoolean, IsArray } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsArray,
+} from 'class-validator';
 
 export class CreateCompanyDto {
   @IsNotEmpty()
@@ -52,14 +60,14 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsArray()
   logoFileIds?: string[]; // Array of file IDs for logos
-  
+
   @IsOptional()
   @IsArray()
   services?: {
-    serviceName: string;
+    serviceId: string;
     description?: string;
   }[];
-  
+
   @IsOptional()
   @IsArray()
   contactInformation?: {

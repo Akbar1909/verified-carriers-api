@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,11 +21,14 @@ export class UsersController {
   // Step 2: Complete user profile (uses authenticated user from token)
   @Patch('complete-profile')
   @UseGuards(UserAuthGuard)
-  completeProfile(
-    @CurrentUser() user,
-    @Body() updateUserDto: UpdateUserDto,
-  ) {
+  completeProfile(@CurrentUser() user, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.completeProfile(user.id, updateUserDto);
+  }
+
+  @Get('me')
+  @UseGuards(UserAuthGuard)
+  me(@CurrentUser() user) {
+    return this.usersService.me(user.id);
   }
 
   // Original endpoints

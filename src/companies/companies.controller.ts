@@ -1,11 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { CompaniesService } from './companies.service';
-import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { RegisterCompanyDto } from './dto/register-company.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyAuthGuard } from '../auth/guards/company-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { FilterCompanyDto } from './dto/filter-company.dto';
 
 @Controller('companies')
 export class CompaniesController {
@@ -24,14 +34,23 @@ export class CompaniesController {
     @CurrentUser() company,
     @Body() updateCompanyDto: UpdateCompanyDto,
   ) {
-
     return this.companiesService.completeProfile(company.id, updateCompanyDto);
   }
 
+  @Get('me')
+  @UseGuards(CompanyAuthGuard)
+  me(@CurrentUser() company) {
+    return this.companiesService.me(company?.id);
+  }
+
+  @Get('count')
+  count() {
+    return this.companiesService.findCount();
+  }
 
   @Get()
-  findAll() {
-    return this.companiesService.findAll();
+  findAll(@Query() filterDto: FilterCompanyDto) {
+    return this.companiesService.findAll(filterDto);
   }
 
   @Get(':id')

@@ -8,6 +8,8 @@ import { FilesService } from '../files/files.service';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { RegisterCompanyDto } from './dto/register-company.dto';
 import * as bcrypt from 'bcrypt';
+import { FilterCompanyDto } from './dto/filter-company.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CompaniesService {
@@ -15,6 +17,24 @@ export class CompaniesService {
     private prisma: PrismaService,
     private filesService: FilesService,
   ) {}
+
+  async me(companyId: string) {
+    try {
+      const result = await this.prisma.company.findUnique({
+        where: {
+          id: companyId,
+        },
+      });
+
+      return result;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('Company with email not found');
+      }
+
+      throw Error;
+    }
+  }
 
   // Step 1: Initial company registration with basic info
   async register(registerCompanyDto: RegisterCompanyDto) {
@@ -53,75 +73,74 @@ export class CompaniesService {
     }
   }
 
- // Fixed method in CompaniesService
+  // Fixed method in CompaniesService
 
-async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
+  async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
+    // Check if company exists
+    await this.findOne(id);
 
+    const { logoFileIds, services, contactInformation, ...companyData } =
+      updateCompanyDto;
 
-  // Check if company exists
-  await this.findOne(id);
+    // Only hash password if provided in the update
+    const dataToUpdate = {
+      ...companyData,
+      registrationStatus: 'COMPLETE' as any,
+    };
 
-  
-  const { logoFileIds, services, contactInformation, ...companyData } = updateCompanyDto;
-  
-  // Only hash password if provided in the update
-  let dataToUpdate = { ...companyData, registrationStatus: 'COMPLETE' as any };
-  
- 
-  
-  // Update company basic info
-  await this.prisma.company.update({
-    where: { id },
-    data: dataToUpdate,
-  });
-  
-  // Add logos if provided
-  if (logoFileIds && logoFileIds.length > 0) {
-    for (const fileId of logoFileIds) {
-      const companyLogo = await this.prisma.companyLogo.create({
-        data: {
-          companyId: id,
-        },
-      });
-      await this.filesService.linkToCompanyLogo(fileId, companyLogo.id);
-    }
-  }
-  
-  // Add services if provided
-  if (services && services.length > 0) {
-    for (const service of services) {
-      await this.prisma.service.create({
-        data: {
-          ...service,
-          serviceName: service.serviceName as any, // Explicitly cast serviceName to ServiceType
-          company: {
-            connect: { id },
+    // Update company basic info
+    await this.prisma.company.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+
+    // Add logos if provided
+    if (logoFileIds && logoFileIds.length > 0) {
+      for (const fileId of logoFileIds) {
+        const companyLogo = await this.prisma.companyLogo.create({
+          data: {
+            companyId: id,
           },
-        },
-      });
+        });
+        await this.filesService.linkToCompanyLogo(fileId, companyLogo.id);
+      }
     }
-  }
-  
-  // Add contact information if provided
-  if (contactInformation && contactInformation.length > 0) {
-    for (const contact of contactInformation) {
-      await this.prisma.contactInformation.create({
-        data: {
-          ...contact,
-          companyId: id,
-        },
+    // Connect existing services via join table (with description)
+    if (services?.length) {
+      // Optional: clear existing mappings first
+      await this.prisma.companyService.deleteMany({
+        where: { companyId: id },
       });
+
+      for (const service of services) {
+        await this.prisma.companyService.create({
+          data: {
+            companyId: id,
+            serviceId: service.serviceId, // existing service ID
+            description: service.description, // custom company-provided description
+          },
+        });
+      }
     }
+
+    // Add contact information if provided
+    if (contactInformation && contactInformation.length > 0) {
+      for (const contact of contactInformation) {
+        await this.prisma.contactInformation.create({
+          data: {
+            ...contact,
+            companyId: id,
+          },
+        });
+      }
+    }
+
+    // Return updated company
+    return this.findOne(id);
   }
-  
-  // Return updated company
-  return this.findOne(id);
-}
 
   // Verify a company (admin function)
   async verifyCompany(id: string, adminId: string) {
-    const company = await this.findOne(id);
-
     return this.prisma.company.update({
       where: { id },
       data: {
@@ -133,18 +152,138 @@ async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
     });
   }
 
-  async findAll() {
-    return this.prisma.company.findMany({
-      include: {
-        companyLogos: {
-          include: {
-            file: true,
+  async findAll({ experience, serviceIds = [] }: FilterCompanyDto) {
+    const whereClause: Prisma.CompanyWhereInput = {};
+
+    console.log(serviceIds)
+
+    if (experience) {
+      const currentYear = new Date().getFullYear();
+      const maxFoundingYear = currentYear - experience;
+      whereClause.foundingYear = {
+        lte: maxFoundingYear,
+        not: null,
+      };
+    }
+
+    if (serviceIds.length > 0) {
+      whereClause.services = {
+        some: {
+          serviceId: {
+            in: serviceIds,
           },
         },
-        services: true,
-        contactInformation: true,
+      };
+    }
+
+    const [companies, count] = await this.prisma.$transaction([
+      this.prisma.company.findMany({
+        where: whereClause,
+
+        include: {
+          companyLogos: {
+            include: {
+              file: true,
+            },
+          },
+          services: {
+            include: {
+              service: {
+                select: {
+                  serviceName: true,
+                  serviceLabel: true,
+                },
+              },
+            },
+          },
+          contactInformation: true,
+        },
+      }),
+      this.prisma.company.count({ where: whereClause }),
+    ]);
+
+    return {
+      list: companies,
+      total: count,
+    };
+  }
+
+  async findCount() {
+    const currentYear = new Date().getFullYear();
+
+    // Group companies by foundingYear for experience calculation
+    const companiesByYear = await this.prisma.company.groupBy({
+      by: ['foundingYear'],
+      _count: {
+        foundingYear: true,
       },
     });
+
+    // Calculate experience buckets
+    const experienceResult: Record<1 | 3 | 5 | 7 | 10, number> = {
+      1: 0,
+      3: 0,
+      5: 0,
+      7: 0,
+      10: 0,
+    };
+
+    for (const { foundingYear, _count } of companiesByYear) {
+      if (!foundingYear) continue; // skip null foundingYears
+
+      const experience = currentYear - foundingYear;
+
+      if (experience >= 10) {
+        experienceResult[10] += _count.foundingYear;
+        experienceResult[7] += _count.foundingYear;
+        experienceResult[5] += _count.foundingYear;
+        experienceResult[3] += _count.foundingYear;
+        experienceResult[1] += _count.foundingYear;
+      } else if (experience >= 7) {
+        experienceResult[7] += _count.foundingYear;
+        experienceResult[5] += _count.foundingYear;
+        experienceResult[3] += _count.foundingYear;
+        experienceResult[1] += _count.foundingYear;
+      } else if (experience >= 5) {
+        experienceResult[5] += _count.foundingYear;
+        experienceResult[3] += _count.foundingYear;
+        experienceResult[1] += _count.foundingYear;
+      } else if (experience >= 3) {
+        experienceResult[3] += _count.foundingYear;
+        experienceResult[1] += _count.foundingYear;
+      } else if (experience >= 1) {
+        experienceResult[1] += _count.foundingYear;
+      }
+    }
+
+    // Get company counts per service (join table CompanyService)
+    const companyServiceCounts = await this.prisma.companyService.groupBy({
+      by: ['serviceId'],
+      _count: {
+        companyId: true,
+      },
+    });
+
+    // Fetch service details to add names/labels
+    const services = await this.prisma.service.findMany({
+      where: {
+        id: { in: companyServiceCounts.map((c) => c.serviceId) },
+      },
+    });
+
+    const serviceMap = Object.fromEntries(services.map((s) => [s.id, s]));
+
+    const serviceCounts = companyServiceCounts.map((c) => ({
+      serviceId: c.serviceId,
+      companyCount: c._count.companyId,
+      serviceName: serviceMap[c.serviceId]?.serviceName || '',
+      serviceLabel: serviceMap[c.serviceId]?.serviceLabel || '',
+    }));
+
+    return {
+      experience: experienceResult,
+      companyCountsByService: serviceCounts,
+    };
   }
 
   // Find companies with specific registration status
@@ -166,8 +305,7 @@ async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
   }
 
   async findOne(id: string) {
-
-    console.log({id},'test')
+    console.log({ id }, 'test');
 
     const company = await this.prisma.company.findUnique({
       where: { id },
@@ -204,6 +342,7 @@ async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
     }
 
     // Remove sensitive information
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = company;
     return result;
   }
@@ -219,6 +358,7 @@ async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
     }
 
     // Remove sensitive information
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = company;
     return result;
   }
@@ -227,8 +367,12 @@ async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
     // Check if company exists
     await this.findOne(id);
 
-    const { logoFileIds, services, contactInformation, ...companyData } =
-      updateCompanyDto;
+    const {
+      logoFileIds,
+      services = [],
+      contactInformation,
+      ...companyData
+    } = updateCompanyDto;
 
     // Hash password if provided
     if (companyData.password) {
@@ -256,19 +400,17 @@ async completeProfile(id: string, updateCompanyDto: UpdateCompanyDto) {
       }
     }
 
-    // Update services if provided
-    if (services && services.length > 0) {
-      // Optional: Clear existing services if needed
-      // await this.prisma.service.deleteMany({ where: { companyId: id } });
+    if (services?.length) {
+      await this.prisma.companyService.deleteMany({
+        where: { companyId: id },
+      });
 
       for (const service of services) {
-        await this.prisma.service.create({
+        await this.prisma.companyService.create({
           data: {
-            ...service,
-            serviceName: service.serviceName as any, // Explicitly cast serviceName to ServiceType
-            company: {
-              connect: { id },
-            },
+            companyId: id,
+            serviceId: service.serviceId,
+            description: service.description,
           },
         });
       }
