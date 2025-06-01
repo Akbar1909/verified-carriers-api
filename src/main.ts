@@ -5,13 +5,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: ['http://verifiedcarriers.com'], // frontend domain
+    origin: ['http://verifiedcarriers.com', 'http://www.verifiedcarriers.com'], // frontend domain
     credentials: true, // if you're using cookies or Authorization headers
-  });
-
-  app.use((req, res, next) => {
-    // console.log('Auth header:', req.headers.authorization);
-    next();
   });
 
   app.setGlobalPrefix('api/v1');
