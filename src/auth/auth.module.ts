@@ -8,6 +8,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CompaniesModule } from '../companies/companies.module';
 import { UsersModule } from 'src/users/users.module';
+import { ModeratorsModule } from 'src/moderators/moderators.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { UsersModule } from 'src/users/users.module';
     PassportModule,
     CompaniesModule,
     UsersModule,
+    ModeratorsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

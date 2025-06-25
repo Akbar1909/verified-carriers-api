@@ -309,7 +309,7 @@ export class ReviewService {
         data: {
           isVerified: true,
           moderatedAt: new Date(),
-          moderatedBy: verifyDto.moderatorId,
+         
         },
       });
 

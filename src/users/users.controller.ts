@@ -7,12 +7,15 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
+  ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserAuthGuard } from 'src/auth/guards/user-auth.guard';
+import { FindAllDto } from './dto/find-all.dto';
 
 @Controller('users')
 export class UsersController {
@@ -39,8 +42,8 @@ export class UsersController {
   }
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query(ValidationPipe) params: FindAllDto) {
+    return this.usersService.findAll(params);
   }
 
   @Get(':id')

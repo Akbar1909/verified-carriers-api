@@ -12,6 +12,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
+// Moderator roles enum
+enum ModeratorRole {
+  ADMIN           // Full system access
+  SENIOR_MOD      // Can verify companies, moderate reviews, manage other mods
+  CONTENT_MOD     // Can moderate reviews and content
+  COMPANY_MOD     // Can verify companies only
+  SUPPORT         // Read-only access for customer support
+}
+
+enum ModeratorStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// Moderator model
+model Moderator {
+  id            String          @id @default(cuid())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Basic info
+  firstName     String
+  lastName      String
+  email         String          @unique
+  password      String          // Hashed password
+  
+  // Moderator specific fields
+  role          ModeratorRole   @default(CONTENT_MOD)
+  status        ModeratorStatus @default(ACTIVE)
+  
+
+  
+  // Activity tracking
+  lastLoginAt   DateTime?
+  loginCount    Int             @default(0)
+  
+  // Relations - what they've moderated
+  verifiedCompanies     Company[]       @relation("VerifiedBy")
+  moderatedReviews      Review[]        @relation("ModeratedBy")
+  
+  @@index([email])
+  @@index([role, status])
+  @@index([status])
+  @@map("moderators")
+}
+
 // User model for authentication and profile
 // In your prisma schema file
 
@@ -88,7 +136,8 @@ model Company {
   registrationStatus RegistrationStatus @default(INITIAL)
   isVerified        Boolean           @default(false)
   verifiedAt        DateTime?
-  verifiedBy        String?           // Could be admin ID or system identifier
+  verifiedBy        Moderator?        @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  verifiedById      String?
 
 
   // Contact info
@@ -98,6 +147,8 @@ model Company {
   companyLogos      CompanyLogo[]
   services          CompanyService[]  // ⬅️ now references join table
   reviews           Review[]
+
+  
   
   @@map("companies")
 }
@@ -214,7 +265,9 @@ model Review {
   // For review moderation
   isPublished         Boolean       @default(true)
   moderatedAt         DateTime?
-  moderatedBy         String?
+  moderatedBy         Moderator?    @relation("ModeratedBy", fields: [moderatedById], references: [id])
+  moderatedById       String?
+  moderationReason    String?       @db.Text // Why was it moderated
   
   // Relations
   photos              ReviewPhoto[]

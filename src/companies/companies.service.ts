@@ -140,21 +140,29 @@ export class CompaniesService {
   }
 
   // Verify a company (admin function)
-  async verifyCompany(id: string, adminId: string) {
+  async verifyCompany(id: string) {
     return this.prisma.company.update({
       where: { id },
       data: {
         isVerified: true,
         verifiedAt: new Date(),
-        verifiedBy: adminId,
         registrationStatus: 'VERIFIED',
       },
     });
   }
 
-  async findAll({ experience, serviceIds = [] }: FilterCompanyDto) {
+  async findAll({
+    experience,
+    serviceIds = [],
+    page = 1,
+    size = 10,
+  }: FilterCompanyDto) {
     const whereClause: Prisma.CompanyWhereInput = {};
 
+    // Calculate pagination
+    const pageNumber = +page;
+    const sizeNumber = +size;
+    const skip = (pageNumber - 1) * sizeNumber;
 
     if (experience) {
       const currentYear = new Date().getFullYear();
@@ -175,10 +183,11 @@ export class CompaniesService {
       };
     }
 
-    const [companies, count] = await this.prisma.$transaction([
+    const [companies, totalCount] = await this.prisma.$transaction([
       this.prisma.company.findMany({
         where: whereClause,
-
+        skip,
+        take: sizeNumber,
         include: {
           companyLogos: {
             include: {
@@ -201,9 +210,25 @@ export class CompaniesService {
       this.prisma.company.count({ where: whereClause }),
     ]);
 
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / sizeNumber);
+    const hasNextPage = pageNumber < totalPages;
+    const hasPreviousPage = pageNumber > 1;
+
     return {
-      list: companies,
-      total: count,
+      data: companies,
+      pagination: {
+        page: pageNumber,
+        size: sizeNumber,
+        totalCount,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
+      filters: {
+        experience,
+        serviceIds,
+      },
     };
   }
 

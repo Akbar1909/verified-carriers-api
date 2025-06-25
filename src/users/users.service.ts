@@ -9,6 +9,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RegisterUserDto } from './dto/register-user.dto';
 import * as bcrypt from 'bcrypt';
+import { FindAllDto } from './dto/find-all.dto';
 
 @Injectable()
 export class UsersService {
@@ -119,19 +120,85 @@ export class UsersService {
     }
   }
 
-  async findAll() {
+  async findAll(findAllDto: FindAllDto) {
+    const { page, size, search, sortBy, sortOrder, profileStatus } = findAllDto;
+
+    // Ensure page and size are numbers
+    const pageNumber = Number(page) || 1;
+    const sizeNumber = Number(size) || 10;
+
+    // Validate converted numbers
+    if (pageNumber < 1) {
+      throw new BadRequestException('Page must be greater than 0');
+    }
+    if (sizeNumber < 1 || sizeNumber > 100) {
+      throw new BadRequestException('Size must be between 1 and 100');
+    }
+
+    // Calculate skip value for pagination
+    const skip = (pageNumber - 1) * sizeNumber;
+
+    // Build where clause for filtering
+    const where: any = {};
+
+    // Add search filter
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Add profile status filter
+    if (profileStatus) {
+      where.profileStatus = profileStatus;
+    }
+
+    // Get total count for pagination metadata
+    const totalCount = await this.prisma.user.count({ where });
+
+    // Build orderBy clause
+    const orderBy = { [sortBy]: sortOrder };
+
+    // Get paginated users
     const users = await this.prisma.user.findMany({
+      skip,
+      take: sizeNumber,
+      where,
+      orderBy,
       include: {
         image: true,
-        reviews: true,
       },
     });
 
     // Remove sensitive information
-    return users.map((user) => {
+    const safeUsers = users.map((user) => {
       const { password, ...result } = user;
       return result;
     });
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / sizeNumber);
+    const hasNextPage = pageNumber < totalPages;
+    const hasPreviousPage = pageNumber > 1;
+
+    return {
+      data: safeUsers,
+      pagination: {
+        page: pageNumber,
+        size: sizeNumber,
+        totalCount,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
+      filters: {
+        search,
+        profileStatus,
+        sortBy,
+        sortOrder,
+      },
+    };
   }
 
   async findOne(id: string) {

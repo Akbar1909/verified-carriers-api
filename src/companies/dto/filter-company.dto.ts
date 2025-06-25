@@ -1,4 +1,12 @@
-import { IsOptional, IsInt, Min, IsArray, ArrayUnique, ArrayNotEmpty, IsString } from 'class-validator';
+import {
+  IsOptional,
+  IsInt,
+  Min,
+  IsArray,
+  ArrayUnique,
+  ArrayNotEmpty,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -25,4 +33,27 @@ export class FilterCompanyDto {
   @ArrayNotEmpty()
   @IsString({ each: true }) // Validate each item is a string
   serviceIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Page number for pagination',
+    example: 1,
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Number of items per page',
+    example: 10,
+    minimum: 1,
+    maximum: 100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  size?: number = 10;
 }

@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyAuthGuard } from '../auth/guards/company-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FilterCompanyDto } from './dto/filter-company.dto';
+import { ModeratorGuard } from 'src/auth/guards/moderator.guard';
 
 @Controller('companies')
 export class CompaniesController {
@@ -56,6 +57,12 @@ export class CompaniesController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.companiesService.findOne(id);
+  }
+
+  @Post('/verify/:id')
+  // @UseGuards(ModeratorGuard)
+  verifyCompany(@Param('id') id: string) {
+    return this.companiesService.verifyCompany(id);
   }
 
   @Patch(':id')

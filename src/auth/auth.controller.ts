@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { RegisterCompanyDto } from '../companies/dto/register-company.dto';
 import { RegisterUserDto } from '../users/dto/register-user.dto';
+import { RegisterModeratorDto } from 'src/moderators/dto/register-moderator.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -30,6 +31,16 @@ export class AuthController {
   @Post('company/register')
   registerCompany(@Body() registerCompanyDto: RegisterCompanyDto) {
     return this.authService.registerCompany(registerCompanyDto);
+  }
+
+  @Post('moderator/login')
+  moderatorLogin(@Body() loginDto: LoginDto) {
+    return this.authService.moderatorLogin(loginDto);
+  }
+
+  @Post('moderator/register')
+  registerModerator(@Body() registerModeratorDto: RegisterModeratorDto) {
+    return this.authService.registerModerator(registerModeratorDto);
   }
 
   // Get current authenticated profile
