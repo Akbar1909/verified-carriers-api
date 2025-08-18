@@ -13,6 +13,7 @@ import {
   ClassSerializerInterceptor,
   HttpStatus,
   HttpCode,
+  Req,
 } from '@nestjs/common';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -30,12 +31,18 @@ import {
 } from '@nestjs/swagger';
 import { UserAuthGuard } from 'src/auth/guards/user-auth.guard';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { ModeratorGuard } from 'src/auth/guards/moderator.guard';
+import { Request } from 'express';
+import { JwtService } from '@nestjs/jwt';
 
 @ApiTags('reviews')
 @Controller('reviews')
 @UseInterceptors(ClassSerializerInterceptor)
 export class ReviewController {
-  constructor(private readonly reviewService: ReviewService) {}
+  constructor(
+    private readonly reviewService: ReviewService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   @Post()
   @UseGuards(UserAuthGuard)
@@ -67,8 +74,27 @@ export class ReviewController {
     status: HttpStatus.OK,
     description: 'Returns a paginated list of reviews',
   })
-  findAll(@Query() filters: FilterReviewDto) {
-    return this.reviewService.findAll(filters);
+  findAll(@Query() filters: FilterReviewDto, @Req() req: Request) {
+    let userId: string | undefined;
+
+    // check if auth header present
+    const authHeader = req.headers['authorization'];
+
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = this.jwtService.verify(token, {
+          secret: process.env.JWT_SECRET,
+        }); // 👈 decode token
+        userId = payload.sub; // or payload.id depending on your JWT
+      } catch (err) {
+        console.log({ err });
+        // invalid token → just ignore, leave userId undefined
+      }
+    }
+
+    return this.reviewService.findAll(filters, userId);
   }
 
   @Get(':id')
@@ -104,7 +130,11 @@ export class ReviewController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Unauthorized.',
   })
-  update(@CurrentUser() user, @Param('id') id: string, @Body() updateReviewDto: UpdateReviewDto) {
+  update(
+    @CurrentUser() user,
+    @Param('id') id: string,
+    @Body() updateReviewDto: UpdateReviewDto,
+  ) {
     return this.reviewService.update(user.id, id, updateReviewDto);
   }
 
@@ -131,7 +161,7 @@ export class ReviewController {
   }
 
   @Patch(':id/verify')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ModeratorGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Verify a review' })
   @ApiParam({ name: 'id', description: 'Review ID' })
@@ -148,8 +178,8 @@ export class ReviewController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Unauthorized.',
   })
-  verifyReview(@Param('id') id: string, @Body() verifyDto: VerifyReviewDto) {
-    return this.reviewService.verifyReview(id, verifyDto);
+  verifyReview(@Param('id') id: string) {
+    return this.reviewService.verifyReview(id);
   }
 
   @Patch(':id/publish')

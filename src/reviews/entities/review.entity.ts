@@ -11,6 +11,7 @@ export class ReviewEntity implements Review {
   pickupState: string | null;
   deliveryState: string | null;
   deliveryDate: Date | null;
+  orderId: string;
 
   @Transform(({ value }) => {
     if (value === null) return null;
@@ -27,6 +28,10 @@ export class ReviewEntity implements Review {
   moderationReason: string | null;
   userId: string;
   companyId: string;
+
+  // 🔹 Extra fields for likes
+  likeCount?: number; // total likes
+  liked?: boolean; // whether current user liked
 
   constructor(partial: Partial<ReviewEntity>) {
     Object.assign(this, partial);

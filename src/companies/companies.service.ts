@@ -24,6 +24,12 @@ export class CompaniesService {
         where: {
           id: companyId,
         },
+        include: {
+          companyLogos: {
+            take: 1,
+            include: { file: true },
+          },
+        },
       });
 
       return result;
@@ -329,8 +335,6 @@ export class CompaniesService {
   }
 
   async findOne(id: string) {
-    console.log({ id }, 'test');
-
     const company = await this.prisma.company.findUnique({
       where: { id },
       include: {
@@ -339,25 +343,12 @@ export class CompaniesService {
             file: true,
           },
         },
-        services: true,
-        contactInformation: true,
-        reviews: {
+        services: {
           include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                visibleName: true,
-              },
-            },
-            photos: {
-              include: {
-                file: true,
-              },
-            },
+            service: true,
           },
         },
+        contactInformation: true,
       },
     });
 
@@ -368,6 +359,7 @@ export class CompaniesService {
     // Remove sensitive information
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = company;
+
     return result;
   }
 
@@ -519,5 +511,106 @@ export class CompaniesService {
     return this.prisma.contactInformation.delete({
       where: { id: contactId },
     });
+  }
+
+  async updateCompanyRating(companyId: string) {
+    const stats = await this.prisma.review.aggregate({
+      where: { companyId, isPublished: true },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    const avg = stats._avg.rating || 0;
+    const count = stats._count.rating;
+
+    const isTopRated = avg >= 4.5 && count >= 5; // 🎯 threshold
+
+    return this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        averageRating: avg,
+        reviewCount: count,
+        isTopRated,
+      },
+    });
+  }
+
+  /**
+   * Get companies that people also looked at
+   * @param companyId - current company
+   * @param limit - max number of companies
+   */
+  async peopleAlsoLookedAt(companyId: string, limit = 5) {
+    // 1. Get all users who viewed this company
+    const viewers = await this.prisma.companyView.findMany({
+      where: { companyId },
+      select: { userId: true },
+    });
+
+    const userIds = viewers.map((v) => v.userId).filter(Boolean);
+
+    if (!userIds.length) return [];
+
+    // 2. Get other companies these users viewed (exclude current company)
+    const otherViews = await this.prisma.companyView.findMany({
+      where: {
+        userId: { in: userIds },
+        NOT: { companyId },
+      },
+      select: { companyId: true },
+    });
+
+    const companyIds = Array.from(new Set(otherViews.map((v) => v.companyId)));
+    if (!companyIds.length) return [];
+
+    // 3. Return company details
+    return this.prisma.company.findMany({
+      where: { id: { in: companyIds } },
+      take: limit,
+      orderBy: { viewCount: 'desc' }, // optional: popular first
+      select: {
+        id: true,
+        name: true,
+        website: true,
+        totalEmployees: true,
+        averageRating: true,
+        isTopRated: true,
+        createdAt: true,
+        companyLogos: {
+          include: {
+            file: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
+        isVerified: true,
+        reviewCount: true,
+      },
+    });
+  }
+
+  // company.service.ts
+  async getOtherReviewedCompanies(companyId: string, limit = 4) {
+    const companies = await this.prisma.company.findMany({
+      where: {
+        id: { not: companyId },
+        reviewCount: { gt: 0 }, // only companies with reviews
+      },
+      include: {
+        companyLogos: {
+          take: 1,
+          include: { file: true },
+        },
+      },
+      orderBy: [
+        { averageRating: 'desc' }, // highest rating first
+        { reviewCount: 'desc' }, // then by number of reviews
+      ],
+      take: limit,
+    });
+
+    return companies;
   }
 }

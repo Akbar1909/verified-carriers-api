@@ -23,6 +23,9 @@ export class UsersService {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password, ...result } = await this.prisma.user.findUnique({
         where: { id: userId },
+        include:{
+          image:true
+        }
       });
       return result;
     } catch (error) {

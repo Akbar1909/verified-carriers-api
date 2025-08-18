@@ -4,26 +4,26 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Injectable()
-export class ModeratorGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+export class ModeratorGuard extends JwtAuthGuard implements CanActivate {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    // First use the JwtAuthGuard to validate the token
+    const isValid = await super.canActivate(context);
 
-  canActivate(context: ExecutionContext): boolean {
+    console.log({ isValid });
+
+    if (!isValid) {
+      return false;
+    }
+
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-   
-
     // Check if user is a moderator
-    if (user?.type !== 'moderator') {
+    if (!user?.isModerator) {
       throw new ForbiddenException('Access denied. Moderator role required.');
-    }
-
-    // Check if moderator is active
-    if (user?.status !== 'ACTIVE') {
-      throw new ForbiddenException('Access denied. Account is not active.');
     }
 
     return true;

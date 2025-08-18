@@ -94,4 +94,26 @@ export class CompaniesController {
   removeContactInformation(@Param('id') id: string) {
     return this.companiesService.removeContactInformation(id);
   }
+
+  @Get(':companyId/also-looked')
+  async getAlsoLooked(
+    @Param('companyId') companyId: string,
+    @Query('limit') limit: string,
+  ) {
+    return this.companiesService.peopleAlsoLookedAt(
+      companyId,
+      Number(limit) || 5,
+    );
+  }
+
+  @Get(':companyId/other-reviews')
+  async getOtherReviews(
+    @Param('companyId') companyId: string,
+    @Query('limit') limit = '4',
+  ) {
+    return this.companiesService.getOtherReviewedCompanies(
+      companyId,
+      Number(limit),
+    );
+  }
 }

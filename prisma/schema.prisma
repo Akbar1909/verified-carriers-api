@@ -12,14 +12,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 // Moderator roles enum
 enum ModeratorRole {
-  ADMIN           // Full system access
-  SENIOR_MOD      // Can verify companies, moderate reviews, manage other mods
-  CONTENT_MOD     // Can moderate reviews and content
-  COMPANY_MOD     // Can verify companies only
-  SUPPORT         // Read-only access for customer support
+  ADMIN // Full system access
+  SENIOR_MOD // Can verify companies, moderate reviews, manage other mods
+  CONTENT_MOD // Can moderate reviews and content
+  COMPANY_MOD // Can verify companies only
+  SUPPORT // Read-only access for customer support
 }
 
 enum ModeratorStatus {
@@ -30,30 +29,28 @@ enum ModeratorStatus {
 
 // Moderator model
 model Moderator {
-  id            String          @id @default(cuid())
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
-  // Basic info
-  firstName     String
-  lastName      String
-  email         String          @unique
-  password      String          // Hashed password
-  
-  // Moderator specific fields
-  role          ModeratorRole   @default(CONTENT_MOD)
-  status        ModeratorStatus @default(ACTIVE)
-  
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  
+  // Basic info
+  firstName String
+  lastName  String
+  email     String @unique
+  password  String // Hashed password
+
+  // Moderator specific fields
+  role   ModeratorRole   @default(CONTENT_MOD)
+  status ModeratorStatus @default(ACTIVE)
+
   // Activity tracking
-  lastLoginAt   DateTime?
-  loginCount    Int             @default(0)
-  
+  lastLoginAt DateTime?
+  loginCount  Int       @default(0)
+
   // Relations - what they've moderated
-  verifiedCompanies     Company[]       @relation("VerifiedBy")
-  moderatedReviews      Review[]        @relation("ModeratedBy")
-  
+  verifiedCompanies Company[] @relation("VerifiedBy")
+  moderatedReviews  Review[]  @relation("ModeratedBy")
+
   @@index([email])
   @@index([role, status])
   @@index([status])
@@ -65,114 +62,128 @@ model Moderator {
 
 // User registration status enum
 enum UserProfileStatus {
-  INITIAL       // Just registered with basic info
-  COMPLETE      // Completed full profile
+  INITIAL // Just registered with basic info
+  COMPLETE // Completed full profile
 }
 
 model User {
-  id            String            @id @default(cuid())
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  name          String            @default("")
-  firstName     String?
-  lastName      String?
-  email         String            @unique
-  password      String            // Hashed password
-  
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String   @default("")
+  firstName String?
+  lastName  String?
+  email     String   @unique
+  password  String // Hashed password
+
   // Profile status
   profileStatus UserProfileStatus @default(INITIAL)
-  
+
   // User profile information
-  visibleName   String?
-  phoneNumber   String?
-  contactEmail  String?           // This can be different from auth email
-  country       String?
-  state         String?
-  bio           String?           @db.Text
-  
+  visibleName  String?
+  phoneNumber  String?
+  contactEmail String? // This can be different from auth email
+  country      String?
+  state        String?
+  bio          String? @db.Text
+
   // Social media
-  twitter       String?
-  linkedin      String?
-  facebook      String?
-  
+  twitter  String?
+  linkedin String?
+  facebook String?
+
   // Relations
-  reviews       Review[]
-  image         File?             @relation("UserProfileImage")
-  
+  reviews Review[]
+  image   File?    @relation("UserProfileImage")
+  quotes  Quote[] // ⬅️ user’s requested quotes
+
+  // New: user’s reactions
+  reviewReactions ReviewReaction[]
+
+  // 👇 new
+  companyViews CompanyView[]
+
   @@map("users")
 }
 
 // Registration status enum
 enum RegistrationStatus {
-  INITIAL      // Just created account with basic info
-  COMPLETE     // Completed full profile
-  VERIFIED     // Company has been verified by admin
+  INITIAL // Just created account with basic info
+  COMPLETE // Completed full profile
+  VERIFIED // Company has been verified by admin
 }
 
 // Company model
 model Company {
-  id                String            @id @default(cuid())
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Basic info
-  name              String
-  firstName         String?
-  lastName          String?
-  website           String?
-  salesEmail        String?
-  contactPhone      String?
-  mcNumber          String?           @unique // MC#
-  usdotNumber       String?           @unique // USDOT#
-  foundingYear      Int?
-  totalEmployees    Int?
-  aboutCompany      String?           @db.Text
-  
+  name           String
+  firstName      String?
+  lastName       String?
+  website        String?
+  salesEmail     String?
+  contactPhone   String?
+  mcNumber       String? @unique // MC#
+  usdotNumber    String? @unique // USDOT#
+  foundingYear   Int?
+  totalEmployees Int?
+  aboutCompany   String? @db.Text
+
   // Authentication (for company accounts)
-  workEmail         String            @unique  // Required for company login
-  password          String            // Hashed password, for company login
-  
+  workEmail String @unique // Required for company login
+  password  String // Hashed password, for company login
+
   // Registration and verification status
   registrationStatus RegistrationStatus @default(INITIAL)
-  isVerified        Boolean           @default(false)
-  verifiedAt        DateTime?
-  verifiedBy        Moderator?        @relation("VerifiedBy", fields: [verifiedById], references: [id])
-  verifiedById      String?
+  isVerified         Boolean            @default(false)
+  verifiedAt         DateTime?
+  verifiedBy         Moderator?         @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  verifiedById       String?
 
+  // 🔥 Badge fields
+  averageRating Decimal? @db.Decimal(3, 2)
+  reviewCount   Int      @default(0)
+  isTopRated    Boolean  @default(false)
+
+  // 👇 new
+  viewCount Int           @default(0) // cached counter for fast UI
+  views     CompanyView[] // relation for tracking
 
   // Contact info
   contactInformation ContactInformation[]
 
   // Relations
-  companyLogos      CompanyLogo[]
-  services          CompanyService[]  // ⬅️ now references join table
-  reviews           Review[]
+  companyLogos CompanyLogo[]
+  services     CompanyService[] // ⬅️ now references join table
+  reviews      Review[]
+  quotes       Quote[] // ⬅️ quotes tied to this company
 
-  
-  
   @@map("companies")
 }
 
 // File model for all uploads
 model File {
-  id            String   @id @default(cuid())
-  createdAt     DateTime @default(now())
-  originalName  String
-  filename      String   // Stored filename
-  path          String   // File path on server
-  mimeType      String
-  size          Int
-  
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  originalName String
+  filename     String // Stored filename
+  path         String // File path on server
+  mimeType     String
+  size         Int
+
   // Relations - a file can only be associated with one entity
-  userImage     User?    @relation("UserProfileImage", fields: [userId], references: [id])
-  userId        String?  @unique
-  
+  userImage User?   @relation("UserProfileImage", fields: [userId], references: [id])
+  userId    String? @unique
+
   companyLogo   CompanyLogo? @relation("LogoFile", fields: [companyLogoId], references: [id])
-  companyLogoId String?  @unique
-  
+  companyLogoId String?      @unique
+
   reviewPhoto   ReviewPhoto? @relation("ReviewFile", fields: [reviewPhotoId], references: [id])
-  reviewPhotoId String?  @unique
-  
+  reviewPhotoId String?      @unique
+
   @@map("files")
 }
 
@@ -183,7 +194,7 @@ model CompanyLogo {
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId String
   file      File?    @relation("LogoFile")
-  
+
   @@map("company_logos")
 }
 
@@ -206,13 +217,13 @@ enum ServiceType {
 
 // Company services model
 model Service {
-  id          String      @id @default(cuid())
-  createdAt   DateTime    @default(now())
-  serviceLabel String?    @default("")
-  serviceName String      // Using enum for consistency
-  description String?     @db.Text
-  companies    CompanyService[]  // ⬅️ now references join table
-  
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now())
+  serviceLabel String?          @default("")
+  serviceName  String // Using enum for consistency
+  description  String?          @db.Text
+  companies    CompanyService[] // ⬅️ now references join table
+
   @@map("services")
 }
 
@@ -220,13 +231,13 @@ model CompanyService {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId String
 
-  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   serviceId String
 
- description String?  @db.Text // ⬅️ add this field
+  description String? @db.Text // ⬅️ add this field
 
   @@unique([companyId, serviceId])
   @@map("company_services")
@@ -239,43 +250,47 @@ model ContactInformation {
   phone         String?
   email         String?
   officeAddress String?  @db.Text
-  contactType   String?  // e.g., "Sales", "Support", "Operations"
+  contactType   String? // e.g., "Sales", "Support", "Operations"
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId     String
-  
+
   @@map("contact_information")
 }
 
 // Review model
 model Review {
-  id                  String        @id @default(cuid())
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  rating              Int           // 1-5
-  reviewText          String        @db.Text
+  id                  String    @id @default(cuid())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  rating              Int // 1-5
+  reviewText          String    @db.Text
   pickupState         String?
   deliveryState       String?
   deliveryDate        DateTime?
-  transportationPrice Decimal?      @db.Decimal(10, 2)
-  
+  transportationPrice Decimal?  @db.Decimal(10, 2)
+  orderId             String
+
   // Additional useful review metadata
-  isVerified          Boolean       @default(false) // If the review has been verified
-  shipmentType        String?       // Type of shipment
-  
+  isVerified   Boolean @default(false) // If the review has been verified
+  shipmentType String? // Type of shipment
+
   // For review moderation
-  isPublished         Boolean       @default(true)
-  moderatedAt         DateTime?
-  moderatedBy         Moderator?    @relation("ModeratedBy", fields: [moderatedById], references: [id])
-  moderatedById       String?
-  moderationReason    String?       @db.Text // Why was it moderated
-  
+  isPublished      Boolean    @default(true)
+  moderatedAt      DateTime?
+  moderatedBy      Moderator? @relation("ModeratedBy", fields: [moderatedById], references: [id])
+  moderatedById    String?
+  moderationReason String?    @db.Text // Why was it moderated
+
   // Relations
-  photos              ReviewPhoto[]
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId              String
-  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId           String
-  
+  photos    ReviewPhoto[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+
+  // New: reactions
+  reactions ReviewReaction[]
+
   @@map("reviews")
 }
 
@@ -286,6 +301,126 @@ model ReviewPhoto {
   review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   reviewId  String
   file      File?    @relation("ReviewFile")
-  
+
   @@map("review_photos")
+}
+
+model CarMake {
+  id     Int        @id @default(autoincrement())
+  name   String
+  models CarModel[]
+  quotes Quote[] // ⬅️ back relation to Quote
+}
+
+model CarModel {
+  id     Int     @id @default(autoincrement())
+  name   String
+  makeId Int
+  make   CarMake @relation(fields: [makeId], references: [id])
+  quotes Quote[] // ⬅️ back relation to Quote
+}
+
+model ZipCode {
+  id          String  @id
+  name        String
+  type        String
+  primaryCity String  @map("primary_city")
+  state       String
+  county      String?
+
+  // Back-relations for quotes
+  pickupQuotes  Quote[] @relation("PickupZip")
+  dropoffQuotes Quote[] @relation("DropoffZip")
+}
+
+enum QuoteStatus {
+  PENDING // User submitted, awaiting company response
+  RESPONDED // Company responded with offer
+  ACCEPTED // User accepted an offer
+  CANCELLED // Cancelled by user or company
+  EXPIRED // No response within time limit
+}
+
+model Quote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Category of shipment (ex: Auto Transport, Household Goods, etc.)
+  category    String
+  subCategory String?
+
+  // Vehicle details
+  carManufactureYear Int?
+  carMake            CarMake?  @relation(fields: [carMakeId], references: [id])
+  carMakeId          Int?
+  carModel           CarModel? @relation(fields: [carModelId], references: [id])
+  carModelId         Int?
+  vehicleType        String?
+
+  // Pickup & Dropoff
+  pickup      ZipCode? @relation("PickupZip", fields: [pickupId], references: [id])
+  pickupId    String?
+  pickupType  String?
+  dropoff     ZipCode? @relation("DropoffZip", fields: [dropoffId], references: [id])
+  dropoffId   String?
+  dropoffType String?
+
+  // Shipping info
+  estimatedShipDate DateTime?
+  shipViaId         Int?
+  vehicleRuns       Int       @default(1) // 0 = No, 1 = Yes
+  carCondition      Int       @default(1)
+
+  // Quote price (optional)
+  price Decimal? @db.Decimal(10, 2)
+
+  // Quote status
+  status QuoteStatus @default(PENDING)
+
+  // Contact info for this quote
+  fullName String
+  phone    String
+  email    String
+
+  // Relations
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String?
+
+  @@map("quotes")
+}
+
+model ReviewReaction {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reviewId String
+
+  @@unique([userId, reviewId]) // 👈 one like per user per review
+  @@map("review_reactions")
+}
+
+model CompanyView {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  date      DateTime // normalize to day
+
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+  @@unique([userId, companyId, date]) // ✅ prevents duplicate views
+  @@map("company_views")
 }

@@ -16,6 +16,8 @@ export class ModeratorsService {
   async register(registerModeratorDto: RegisterModeratorDto) {
     const { email, password, firstName, lastName } = registerModeratorDto;
 
+    console.log({email, password})
+
     // Check if moderator already exists
     const existingModerator = await this.prisma.moderator.findUnique({
       where: { email },

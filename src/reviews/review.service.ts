@@ -9,14 +9,16 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { FilterReviewDto } from './dto/filter-review.dto';
 import { ReviewEntity } from './entities/review.entity';
-import { VerifyReviewDto, PublishReviewDto } from './dto/moderation-review.dto';
+import { PublishReviewDto } from './dto/moderation-review.dto';
 import { FilesService } from 'src/files/files.service';
+import { CompaniesService } from 'src/companies/companies.service';
 
 @Injectable()
 export class ReviewService {
   constructor(
     private prisma: PrismaService,
     private fileService: FilesService,
+    private companyService: CompaniesService,
   ) {}
 
   async create(
@@ -49,11 +51,12 @@ export class ReviewService {
       const review = await this.prisma.review.create({
         data: {
           ...reviewDto,
+          isVerified: true,
           userId: user.id,
         },
-        include:{
-            photos:true
-        }
+        include: {
+          photos: true,
+        },
       });
 
       if (fileIds && fileIds.length > 0) {
@@ -61,11 +64,11 @@ export class ReviewService {
           const reviewPhoto = await this.prisma.reviewPhoto.create({
             data: {
               reviewId: review.id,
-              file:{
-                connect:{
-                    id:fileId
-                }
-              }
+              file: {
+                connect: {
+                  id: fileId,
+                },
+              },
             },
           });
 
@@ -73,7 +76,9 @@ export class ReviewService {
         }
       }
 
-      return new ReviewEntity(review)
+      await this.companyService.updateCompanyRating(createReviewDto.companyId);
+
+      return new ReviewEntity(review);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -89,12 +94,17 @@ export class ReviewService {
     }
   }
 
-  async findAll(filters: FilterReviewDto): Promise<{
+  async findAll(
+    filters: FilterReviewDto,
+    currentUserId?: string,
+  ): Promise<{
     data: ReviewEntity[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
+    pagination: {
+      page: number;
+      totalCount: number;
+      size: number;
+      totalPages: number;
+    };
   }> {
     const { page = 1, limit = 10, ...otherFilters } = filters;
     const skip = (page - 1) * limit;
@@ -156,6 +166,7 @@ export class ReviewService {
                 firstName: true,
                 lastName: true,
                 visibleName: true,
+                image: true,
               },
             },
             company: {
@@ -164,6 +175,17 @@ export class ReviewService {
                 name: true,
               },
             },
+            _count: {
+              select: {
+                reactions: true,
+              },
+            },
+            reactions: currentUserId
+              ? {
+                  where: { userId: currentUserId }, // 👈 check if current user liked
+                  select: { id: true },
+                }
+              : false,
           },
         }),
         this.prisma.review.count({ where }),
@@ -172,14 +194,23 @@ export class ReviewService {
       const totalPages = Math.ceil(total / limit);
 
       // Transform to entities
-      const reviewEntities = reviews.map((review) => new ReviewEntity(review));
+      const reviewEntities = reviews.map(
+        (review) =>
+          new ReviewEntity({
+            ...review,
+            likeCount: review._count.reactions,
+            liked: review.reactions && review.reactions.length > 0, // 👈 true if current user liked
+          }),
+      );
 
       return {
         data: reviewEntities,
-        total,
-        page,
-        limit,
-        totalPages,
+        pagination: {
+          totalCount: total,
+          page,
+          size: limit,
+          totalPages,
+        },
       };
     } catch (error) {
       throw new BadRequestException(
@@ -296,10 +327,7 @@ export class ReviewService {
     }
   }
 
-  async verifyReview(
-    id: string,
-    verifyDto: VerifyReviewDto,
-  ): Promise<ReviewEntity> {
+  async verifyReview(id: string): Promise<ReviewEntity> {
     try {
       // Check if review exists
       await this.findOne(id);
@@ -309,7 +337,6 @@ export class ReviewService {
         data: {
           isVerified: true,
           moderatedAt: new Date(),
-         
         },
       });
 

@@ -9,6 +9,11 @@ import { ReviewModule } from './reviews/review.module';
 import { LocationsModule } from './locations/locations.module';
 import { ServiceModule } from './services/service.module';
 import { ModeratorsModule } from './moderators/moderators.module';
+import { CarModule } from './cars/cars.module';
+import { ZipCodeModule } from './zip-codes/zip-code.module';
+import { QuotesModule } from './quotes/quotes.module';
+import { ReviewReactionModule } from './review-reactions/review-reaction.module';
+import { CompanyViewModule } from './company-view/company-view.module';
 
 @Module({
   imports: [
@@ -23,7 +28,12 @@ import { ModeratorsModule } from './moderators/moderators.module';
     ReviewModule,
     LocationsModule,
     ServiceModule,
-    ModeratorsModule
+    ModeratorsModule,
+    CarModule,
+    ZipCodeModule,
+    QuotesModule,
+    ReviewReactionModule,
+    CompanyViewModule
   ],
 })
 export class AppModule {}

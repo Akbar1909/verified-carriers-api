@@ -53,6 +53,10 @@ export class CreateReviewDto {
   @IsString({ message: 'Delivery state must be a string' })
   deliveryState?: string;
 
+  
+  @IsString({ message: 'Order id' })
+  orderId: string;
+
   @ApiPropertyOptional({
     description: 'Date when the shipment was delivered',
     type: Date,
