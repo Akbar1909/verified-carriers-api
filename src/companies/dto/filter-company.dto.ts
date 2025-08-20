@@ -6,9 +6,13 @@ import {
   ArrayUnique,
   ArrayNotEmpty,
   IsString,
+  IsBoolean,
+  IsDecimal,
+  IsIn,
+  IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiHideProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class FilterCompanyDto {
   @ApiPropertyOptional({
@@ -21,6 +25,19 @@ export class FilterCompanyDto {
   @IsInt()
   @Min(1)
   experience?: number;
+
+  @ApiPropertyOptional({
+    description: 'Filter by ratings (allowed values: 3, 3.5, 4, 4.5)',
+    type: [Number],
+    example: [3.5, 4],
+    enum: [3, 3.5, 4, 4.5],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn([3, 3.5, 4, 4.5], { each: true }) // restrict values
+  @Type(() => Number)
+  rating?: number[];
 
   @ApiPropertyOptional({
     description: 'Filter companies by services',
@@ -56,4 +73,65 @@ export class FilterCompanyDto {
   @IsInt()
   @Min(1)
   size?: number = 10;
+
+  @ApiPropertyOptional({
+    description: 'Filter only top rated companies',
+    example: true,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  topRated?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Sort companies by most reviewed (highest review count)',
+    example: true,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  mostReviewed?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Show only companies created within the last 7 days',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  isNew?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Show only companies verified',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  isVerified?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Sort companies by field',
+    example: 'highlyRated',
+    enum: [
+      'relevancy',
+      'highlyRated',
+      'mostReviewed',
+      'experience',
+      'verifiedFirst',
+    ],
+  })
+  @IsOptional()
+  @IsString()
+  sortBy?:
+    | 'relevancy'
+    | 'highlyRated'
+    | 'mostReviewed'
+    | 'experience'
+    | 'verifiedFirst';
+
+  @ApiHideProperty() // 🚀 Hide from Swagger docs
+  @IsOptional()
+  @IsUUID()
+  userId?: string; // injected in controller, not by client
 }

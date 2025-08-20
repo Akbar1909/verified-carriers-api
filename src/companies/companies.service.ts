@@ -162,6 +162,13 @@ export class CompaniesService {
     serviceIds = [],
     page = 1,
     size = 10,
+    topRated,
+    mostReviewed,
+    isNew,
+    isVerified,
+    rating,
+    sortBy = 'relevancy',
+    userId,
   }: FilterCompanyDto) {
     const whereClause: Prisma.CompanyWhereInput = {};
 
@@ -169,6 +176,32 @@ export class CompaniesService {
     const pageNumber = +page;
     const sizeNumber = +size;
     const skip = (pageNumber - 1) * sizeNumber;
+
+    let orderBy: Prisma.CompanyOrderByWithRelationInput = { createdAt: 'desc' };
+
+    switch (sortBy) {
+      case 'highlyRated':
+        orderBy = { averageRating: 'asc' };
+        break;
+
+      case 'mostReviewed':
+        orderBy = { viewCount: 'desc' };
+        break;
+
+      case 'experience':
+        // assuming you store foundingYear (smaller foundingYear = more experience)
+        orderBy = { foundingYear: 'asc' };
+        break;
+
+      case 'verifiedFirst':
+        orderBy = { isVerified: 'desc' }; // true comes before false
+        break;
+
+      case 'relevancy':
+      default:
+        orderBy = { createdAt: 'desc' };
+        break;
+    }
 
     if (experience) {
       const currentYear = new Date().getFullYear();
@@ -179,6 +212,13 @@ export class CompaniesService {
       };
     }
 
+    if (rating && rating.length > 0) {
+      const minRating = Math.min(...rating);
+      whereClause.averageRating = {
+        gte: minRating,
+      };
+    }
+
     if (serviceIds.length > 0) {
       whereClause.services = {
         some: {
@@ -186,6 +226,25 @@ export class CompaniesService {
             in: serviceIds,
           },
         },
+      };
+    }
+
+    // 🔥 Top rated filter
+    if (topRated) {
+      whereClause.isTopRated = true;
+    }
+
+    if (isVerified) {
+      whereClause.isVerified = true;
+    }
+
+    // 🔹 New companies filter (last 7 days)
+    if (isNew) {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+      whereClause.createdAt = {
+        gte: oneWeekAgo,
       };
     }
 
@@ -200,6 +259,12 @@ export class CompaniesService {
               file: true,
             },
           },
+          ...(userId && {
+            savedByUsers: {
+              where: { userId },
+              select: { id: true },
+            },
+          }),
           services: {
             include: {
               service: {
@@ -212,6 +277,7 @@ export class CompaniesService {
           },
           contactInformation: true,
         },
+        orderBy,
       }),
       this.prisma.company.count({ where: whereClause }),
     ]);
@@ -222,7 +288,10 @@ export class CompaniesService {
     const hasPreviousPage = pageNumber > 1;
 
     return {
-      data: companies,
+      data: companies.map((c) => ({
+        ...c,
+        isSaved: userId ? c.savedByUsers.length > 0 : false,
+      })),
       pagination: {
         page: pageNumber,
         size: sizeNumber,
@@ -238,14 +307,22 @@ export class CompaniesService {
     };
   }
 
-  async findCount() {
+  async findCount({ experience, serviceIds = [], topRated }: FilterCompanyDto) {
     const currentYear = new Date().getFullYear();
 
     // Group companies by foundingYear for experience calculation
     const companiesByYear = await this.prisma.company.groupBy({
       by: ['foundingYear'],
+
       _count: {
         foundingYear: true,
+      },
+    });
+
+    const companiesByRating = await this.prisma.company.groupBy({
+      by: ['averageRating'],
+      _count: {
+        averageRating: true,
       },
     });
 
@@ -286,9 +363,42 @@ export class CompaniesService {
       }
     }
 
+    const ratingResult: Record<3 | 3.5 | 4 | 4.5, number> = {
+      3: 0,
+      3.5: 0,
+      4: 0,
+      4.5: 0,
+    };
+
+    for (const { averageRating, _count } of companiesByRating) {
+      if (!averageRating) continue; // skip null averageRatings
+
+      const avgRatingNum =
+        typeof averageRating.toNumber === 'function'
+          ? averageRating.toNumber()
+          : Number(averageRating);
+
+      if (avgRatingNum >= 4.5) {
+        ratingResult[4.5] = _count.averageRating;
+        ratingResult[4] += _count.averageRating;
+        ratingResult[3.5] = _count.averageRating;
+        ratingResult[3] = _count.averageRating;
+      } else if (avgRatingNum >= 4) {
+        ratingResult[4] = _count.averageRating;
+        ratingResult[3.5] = _count.averageRating;
+        ratingResult[3] = _count.averageRating;
+      } else if (avgRatingNum >= 3.5) {
+        ratingResult[3.5] = _count.averageRating;
+        ratingResult[3] = _count.averageRating;
+      } else if (avgRatingNum >= 3) {
+        ratingResult[3] = _count.averageRating;
+      }
+    }
+
     // Get company counts per service (join table CompanyService)
     const companyServiceCounts = await this.prisma.companyService.groupBy({
       by: ['serviceId'],
+
       _count: {
         companyId: true,
       },
@@ -310,9 +420,37 @@ export class CompaniesService {
       serviceLabel: serviceMap[c.serviceId]?.serviceLabel || '',
     }));
 
+    // ---- Top Rated count ----
+    const topRatedCount = await this.prisma.company.count({
+      where: { isTopRated: true }, // 👈 respect filters
+    });
+
+    // ---- New Companies (last 7 days) ----
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const newCompaniesCount = await this.prisma.company.count({
+      where: {
+        createdAt: { gte: oneWeekAgo },
+      },
+    });
+
+    // ---- Verified Companies Count ----
+    const verifiedCount = await this.prisma.company.count({
+      where: { isVerified: true },
+    });
+
+    // This is the total number of companies in the database
+    const totalCount = await this.prisma.company.count();
+
     return {
+      verifiedCount,
       experience: experienceResult,
       companyCountsByService: serviceCounts,
+      topRatedCount,
+      newCompaniesCount,
+      totalCount,
+      ratingResult,
     };
   }
 
@@ -612,5 +750,62 @@ export class CompaniesService {
     });
 
     return companies;
+  }
+
+  async headerSearch(keyword?: string, size = 5) {
+    if (!keyword) {
+      return []; // Return empty array if no keyword is provided
+    }
+    if (!keyword) {
+      return []; // Return empty array if no keyword is provided
+    }
+
+    return this.prisma.company.findMany({
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          {
+            services: {
+              some: {
+                service: {
+                  serviceName: { contains: keyword, mode: 'insensitive' },
+                },
+              },
+            },
+          },
+          {
+            services: {
+              some: {
+                service: {
+                  serviceLabel: { contains: keyword, mode: 'insensitive' },
+                },
+              },
+            },
+          },
+        ],
+      },
+      take: size,
+      select: {
+        id: true,
+        name: true,
+        companyLogos: {
+          take: 1,
+          include: { file: true },
+        },
+        services: {
+          take: 3, // return a few services for preview
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceName: true,
+                serviceLabel: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

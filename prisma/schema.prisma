@@ -101,7 +101,8 @@ model User {
   reviewReactions ReviewReaction[]
 
   // 👇 new
-  companyViews CompanyView[]
+  companyViews   CompanyView[]
+  savedCompanies SavedCompany[]
 
   @@map("users")
 }
@@ -160,6 +161,7 @@ model Company {
   services     CompanyService[] // ⬅️ now references join table
   reviews      Review[]
   quotes       Quote[] // ⬅️ quotes tied to this company
+  savedByUsers SavedCompany[]
 
   @@map("companies")
 }
@@ -411,16 +413,29 @@ model CompanyView {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
-  date      DateTime // normalize to day
+  date DateTime // normalize to day
 
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, companyId, date]) // ✅ prevents duplicate views
   @@index([userId])
   @@index([companyId])
-  @@unique([userId, companyId, date]) // ✅ prevents duplicate views
   @@map("company_views")
+}
+
+model SavedCompany {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  companyId String
+
+  user    User    @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, companyId]) // ⬅️ prevent duplicates
 }

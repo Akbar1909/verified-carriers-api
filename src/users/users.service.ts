@@ -23,9 +23,9 @@ export class UsersService {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password, ...result } = await this.prisma.user.findUnique({
         where: { id: userId },
-        include:{
-          image:true
-        }
+        include: {
+          image: true,
+        },
       });
       return result;
     } catch (error) {
@@ -287,5 +287,26 @@ export class UsersService {
     return this.prisma.user.delete({
       where: { id },
     });
+  }
+
+  async getUserStats(userId: string) {
+    const [reviewsCount, readsCount, likesCount] = await Promise.all([
+      this.prisma.review.count({
+        where: { userId },
+      }),
+      this.prisma.companyView.count({
+        where: { userId },
+      }),
+      this.prisma.reviewReaction.count({
+        where: { userId },
+      }),
+    ]);
+
+    return {
+      userId,
+      reviewsCount,
+      readsCount,
+      likesCount,
+    };
   }
 }

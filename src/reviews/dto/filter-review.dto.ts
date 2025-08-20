@@ -1,5 +1,12 @@
 // src/reviews/dto/filter-review.dto.ts
-import { IsOptional, IsString, IsInt, Min, Max, IsBoolean } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -8,7 +15,7 @@ export class FilterReviewDto {
     description: 'Page number for pagination',
     minimum: 1,
     default: 1,
-    example: 1
+    example: 1,
   })
   @IsOptional()
   @IsInt({ message: 'Page must be an integer' })
@@ -21,7 +28,7 @@ export class FilterReviewDto {
     minimum: 1,
     maximum: 50,
     default: 10,
-    example: 10
+    example: 10,
   })
   @IsOptional()
   @IsInt({ message: 'Limit must be an integer' })
@@ -32,7 +39,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by user ID',
-    example: 'clfg5d8b30000jz0g9s3z1r8q'
+    example: 'clfg5d8b30000jz0g9s3z1r8q',
   })
   @IsOptional()
   @IsString({ message: 'User ID must be a string' })
@@ -40,7 +47,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by company ID',
-    example: 'clfg5d8b30001jz0g9s3z1r8q'
+    example: 'clfg5d8b30001jz0g9s3z1r8q',
   })
   @IsOptional()
   @IsString({ message: 'Company ID must be a string' })
@@ -50,7 +57,7 @@ export class FilterReviewDto {
     description: 'Filter by rating (1-5)',
     minimum: 1,
     maximum: 5,
-    example: 5
+    example: 5,
   })
   @IsOptional()
   @IsInt({ message: 'Rating must be an integer' })
@@ -61,7 +68,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by shipment type',
-    example: 'Refrigerated'
+    example: 'Refrigerated',
   })
   @IsOptional()
   @IsString({ message: 'Shipment type must be a string' })
@@ -69,7 +76,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by pickup state',
-    example: 'California'
+    example: 'California',
   })
   @IsOptional()
   @IsString({ message: 'Pickup state must be a string' })
@@ -77,7 +84,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by delivery state',
-    example: 'Texas'
+    example: 'Texas',
   })
   @IsOptional()
   @IsString({ message: 'Delivery state must be a string' })
@@ -85,7 +92,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by verification status',
-    example: true
+    example: true,
   })
   @IsOptional()
   @IsBoolean({ message: 'isVerified must be a boolean' })
@@ -94,7 +101,7 @@ export class FilterReviewDto {
 
   @ApiPropertyOptional({
     description: 'Filter by publication status',
-    example: true
+    example: true,
   })
   @IsOptional()
   @IsBoolean({ message: 'isPublished must be a boolean' })

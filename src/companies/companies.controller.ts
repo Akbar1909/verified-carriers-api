@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  Req,
 } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -16,11 +17,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyAuthGuard } from '../auth/guards/company-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FilterCompanyDto } from './dto/filter-company.dto';
-import { ModeratorGuard } from 'src/auth/guards/moderator.guard';
+import { HeaderSearchDto } from './dto/header-search.dto';
+import { JwtService } from '@nestjs/jwt';
 
 @Controller('companies')
 export class CompaniesController {
-  constructor(private readonly companiesService: CompaniesService) {}
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   // Step 1: Initial company registration
   @Post('register')
@@ -45,13 +50,36 @@ export class CompaniesController {
   }
 
   @Get('count')
-  count() {
-    return this.companiesService.findCount();
+  count(@Query() filterDto: FilterCompanyDto) {
+    return this.companiesService.findCount(filterDto);
+  }
+
+  @Get('header-search')
+  async headerSearch(@Query() dto: HeaderSearchDto) {
+    return this.companiesService.headerSearch(dto.keyword, dto.size);
   }
 
   @Get()
-  findAll(@Query() filterDto: FilterCompanyDto) {
-    return this.companiesService.findAll(filterDto);
+  findAll(@Query() filterDto: FilterCompanyDto, @Req() req: Request) {
+    let userId: string | undefined;
+
+    // check if auth header present
+    const authHeader = req.headers['authorization'];
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const payload = this.jwtService.verify(token, {
+          secret: process.env.JWT_SECRET,
+        }); // 👈 decode token
+        userId = payload.sub; // or payload.id depending on your JWT
+      } catch (err) {
+        console.log({ err });
+        // invalid token → just ignore, leave userId undefined
+      }
+    }
+
+    return this.companiesService.findAll({ ...filterDto, userId });
   }
 
   @Get(':id')

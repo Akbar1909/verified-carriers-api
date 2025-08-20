@@ -14,6 +14,7 @@ import { ZipCodeModule } from './zip-codes/zip-code.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { ReviewReactionModule } from './review-reactions/review-reaction.module';
 import { CompanyViewModule } from './company-view/company-view.module';
+import { SavedCompanyModule } from './saved-company/saved-company.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { CompanyViewModule } from './company-view/company-view.module';
     ZipCodeModule,
     QuotesModule,
     ReviewReactionModule,
-    CompanyViewModule
+    CompanyViewModule,
+    SavedCompanyModule,
   ],
 })
 export class AppModule {}

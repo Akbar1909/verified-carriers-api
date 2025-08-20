@@ -51,6 +51,11 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+  @Get(':id/stats')
+  async getUserStats(@Param('id') id: string) {
+    return this.usersService.getUserStats(id);
+  }
+
   @Patch(':id')
   @UseGuards(UserAuthGuard)
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
